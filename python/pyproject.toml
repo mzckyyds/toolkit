@@ -1,0 +1,64 @@
+[project]
+name = "pymzckcli"
+version = "0.1.0"
+description = "Personal Python toolkit CLI (pymzckcli)"
+readme = "README.md"
+authors = [{ name = "mzckyyds", email = "1024418791@qq.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.14.3",
+    "pydantic>=2.13.5",
+    "python-dotenv>=1.2.3",
+    "requests>=2.34.2",
+    "typer>=0.27.2",
+    "websockets>=17.1",
+]
+
+[project.scripts]
+pymzckcli = "pymzckcli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.28,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.414",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.7",
+    "types-requests>=2.33.0.20260906",
+]
+
+[tool.ruff]
+line-length = 88 # 与 Black 默认值一致
+target-version = 'py312' # `[project].requires-python = ">=3.12"` -> `[tool.ruff].target-version = 'py312'`
+# 官方 demo 原样拷贝的文件, 不做任何修改, 因此跳过 lint / format
+extend-exclude = [
+    "src/pymzckcli/asr/_protocol.py",
+    "src/pymzckcli/tts/_protocol.py",
+]
+
+[tool.ruff.lint]
+# 采用全选项 + 单项逐一排除的模式
+select = ["ALL"]
+# COM812、ISC001 与 formatter 冲突, 且职责已由 formatter(skip-magic-trailing-comma = false)接管
+# CPY001: 个人仓库, 无需版权声明
+ignore = ["COM812", "CPY001", "ISC001"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google" # 使用 Google 风格的 Docstring
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+skip-magic-trailing-comma = false
+
+[tool.pyright]
+typeCheckingMode = "strict"
+# 官方 demo 原样拷贝的文件, 不做任何修改, 因此跳过类型检查
+ignore = [
+    "src/pymzckcli/asr/_protocol.py",
+    "src/pymzckcli/tts/_protocol.py",
+]

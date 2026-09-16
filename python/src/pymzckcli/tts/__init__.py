@@ -1,0 +1,251 @@
+"""火山引擎单向流式语音合成 WebSocket 命令行工具.
+
+reference: https://docs.volcengine.com/docs/6561/2534913?lang=zh
+"""
+
+import asyncio
+import json
+import logging
+import os
+import uuid
+from pathlib import Path
+from typing import Any
+
+import typer
+import websockets
+
+from . import _protocol
+
+__all__ = [
+    "app",
+]
+
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_ENDPOINT = (
+    "wss://openspeech.bytedance.com/api/v3/plan/tts/unidirectional/stream"
+)
+_DEFAULT_RESOURCE_ID = "seed-tts-2.0"
+_DEFAULT_SPEAKER = "zh_male_liufei_uranus_bigtts"
+_DEFAULT_AUDIO_FORMAT = "mp3"
+_DEFAULT_AUDIO_SAMPLE_RATE = None
+_DEFAULT_AUDIO_BIT_RATE = None
+_DEFAULT_AUDIO_SPEECH_RATE = 0
+_DEFAULT_AUDIO_LOUDNESS_RATE = 0
+_DEFAULT_AUDIO_ENABLE_SUBTITLE = True
+
+
+# ======================================================================================
+# Helpers
+# ======================================================================================
+def _parse_subtitle(payload: bytes) -> dict[str, Any] | None:
+    """解析 TTSSubtitle 事件 payload, 失败时返回 None."""
+    try:
+        return json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        logger.warning("Failed to parse subtitle payload: %r", e)
+        return None
+
+
+def _accumulate(
+    msg: _protocol.Message,
+    audio_data: bytearray,
+    subtitles: list[dict[str, Any]],
+) -> None:
+    """将服务端消息归集为音频与字幕数据.
+
+    NOTE: 字级时间戳在 TTSSubtitle 事件中, 每个句子一条,
+    TTSSentenceStart/End 中的 words 恒为空.
+    """
+    if msg.type == _protocol.MsgType.AudioOnlyServer and msg.payload:
+        audio_data.extend(msg.payload)
+    elif (
+        msg.type == _protocol.MsgType.FullServerResponse
+        and msg.event == _protocol.EventType.TTSSubtitle
+        and msg.payload
+        and (subtitle := _parse_subtitle(msg.payload)) is not None
+    ):
+        subtitles.append(subtitle)
+
+
+async def _synthesize(  # noqa: PLR0913
+    *,
+    url: str,
+    api_key: str,
+    resource_id: str,
+    speaker: str,
+    text: str,
+    audio_format: str,
+    audio_sample_rate: int | None,
+    audio_bit_rate: int | None,
+    audio_speech_rate: int,
+    audio_loudness_rate: int,
+    audio_enable_subtitle: bool,
+) -> tuple[bytes, list[dict[str, Any]]]:
+    """连接 TTS WebSocket 单向流接口, 返回合成音频数据与字幕数据."""
+    headers = {
+        "X-Api-Key": api_key,
+        "X-Api-Resource-Id": resource_id,
+        "X-Api-Request-Id": str(uuid.uuid4()),
+        "X-Control-Require-Usage-Tokens-Return": "*",
+    }
+    audio_params: dict[str, Any] = {
+        "format": audio_format,
+        "speech_rate": audio_speech_rate,
+        "loudness_rate": audio_loudness_rate,
+        "enable_subtitle": audio_enable_subtitle,
+    }
+    if audio_sample_rate is not None:
+        audio_params["sample_rate"] = audio_sample_rate
+    if audio_bit_rate is not None:
+        audio_params["bit_rate"] = audio_bit_rate
+
+    body: dict[str, Any] = {
+        "req_params": {
+            "speaker": speaker,
+            "text": text,
+            "audio_params": audio_params,
+        }
+    }
+
+    websocket = await websockets.connect(
+        url,
+        additional_headers=headers,
+        max_size=10 * 1024 * 1024,
+    )
+    if websocket.response is None:
+        errmsg = "Failed to get response from WebSocket server"
+        raise RuntimeError(errmsg)
+    logger.info(
+        "Connected to WebSocket server, Logid: %r",
+        websocket.response.headers.get("x-tt-logid", ""),
+    )
+
+    try:
+        await _protocol.full_client_request(websocket, json.dumps(body).encode())  # pyright: ignore[reportUnknownMemberType]
+
+        audio_data = bytearray()
+        subtitles: list[dict[str, Any]] = []
+        while True:
+            msg = await _protocol.receive_message(websocket)  # pyright: ignore[reportUnknownMemberType]
+
+            if msg.type == _protocol.MsgType.Error:
+                errmsg = f"TTS conversion failed: {msg}"
+                raise RuntimeError(errmsg)
+            if (
+                msg.type == _protocol.MsgType.FullServerResponse
+                and msg.event == _protocol.EventType.SessionFinished
+            ):
+                break
+            _accumulate(msg, audio_data, subtitles)
+
+        if not audio_data:
+            errmsg = "No audio data received"
+            raise RuntimeError(errmsg)
+
+        logger.info(
+            "Audio received: %d, subtitles: %d", len(audio_data), len(subtitles)
+        )
+        return bytes(audio_data), subtitles
+    finally:
+        await websocket.close()
+        logger.info("Connection closed")
+
+
+# ======================================================================================
+# Commands
+# ======================================================================================
+app = typer.Typer()
+
+
+@app.command()
+def synth(  # noqa: PLR0913
+    text: str = typer.Argument(
+        ...,
+        help="要合成的文本.",
+    ),
+    *,
+    output: str = typer.Option(
+        "output.mp3",
+        help="输出音频文件路径.",
+    ),
+    endpoint: str = typer.Option(
+        _DEFAULT_ENDPOINT,
+        help="请求端点(WebSocket).",
+    ),
+    resource_id: str = typer.Option(
+        _DEFAULT_RESOURCE_ID,
+        help="请求的模型版本.",
+    ),
+    speaker: str = typer.Option(
+        _DEFAULT_SPEAKER,
+        help="音色.",
+    ),
+    audio_format: str = typer.Option(
+        _DEFAULT_AUDIO_FORMAT,
+        help="指定音频格式: mp3/pcm/ogg_opus/wav.",
+    ),
+    audio_sample_rate: int | None = typer.Option(
+        _DEFAULT_AUDIO_SAMPLE_RATE,
+        help="指定输出音频的采样率(Hz), 不同音频格式支持的采样率不同, "
+        "wav/pcm/mp3 默认值为24000, 可选值为 [8000, 16000, 22050, 24000, "
+        "32000, 44100, 48000], ogg_opus 仅支持 48k.",
+    ),
+    audio_bit_rate: int | None = typer.Option(
+        _DEFAULT_AUDIO_BIT_RATE,
+        help="指定音频比特率(bps), mp3 默认值为 64000, 可选值为 [64000, 160000], "
+        "ogg_opus 可选值为 [64000, 160000], wav/pcm 不支持.",
+    ),
+    audio_speech_rate: int = typer.Option(
+        _DEFAULT_AUDIO_SPEECH_RATE,
+        help="指定音频的语速, 默认值为0, 取值范围 [-50, 100]. "
+        "取值 100 代表 2.0 倍速, -50 代表0.5倍速.",
+    ),
+    audio_loudness_rate: int = typer.Option(
+        _DEFAULT_AUDIO_LOUDNESS_RATE,
+        help="指定音频的音量, 默认值为0, 取值范围 [-50, 100]. "
+        "取值 100 代表 2.0 倍音量, -50 代表 0.5 倍音量.",
+    ),
+    audio_enable_subtitle: bool = typer.Option(
+        default=_DEFAULT_AUDIO_ENABLE_SUBTITLE,
+        help="启用字幕服务, 开启后将返回字级别的时间戳.",
+    ),
+) -> None:
+    """合成语音并保存到文件."""
+    api_key = os.environ.get("ARK_TTS_API_KEY")
+    if api_key is None:
+        errmsg = "未找到 TTS API Key, 请设置环境变量 ARK_TTS_API_KEY"
+        raise typer.BadParameter(errmsg)
+
+    try:
+        audio_data, subtitles = asyncio.run(
+            _synthesize(
+                url=endpoint,
+                api_key=api_key,
+                resource_id=resource_id,
+                speaker=speaker,
+                text=text,
+                audio_format=audio_format,
+                audio_sample_rate=audio_sample_rate,
+                audio_bit_rate=audio_bit_rate,
+                audio_speech_rate=audio_speech_rate,
+                audio_loudness_rate=audio_loudness_rate,
+                audio_enable_subtitle=audio_enable_subtitle,
+            )
+        )
+
+    except Exception:
+        logger.exception("TTS synthesis failed")
+        raise typer.Exit(code=1) from None
+
+    Path(output).write_bytes(audio_data)
+    typer.echo(f"音频已合成: {output} ({len(audio_data)} bytes)")
+
+    if subtitles:
+        subtitle_path = Path(output).with_suffix(".json")
+        subtitle_path.write_text(
+            json.dumps(subtitles, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        typer.echo(f"字幕已保存: {subtitle_path}")

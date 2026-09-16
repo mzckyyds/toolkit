@@ -1,0 +1,13 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# 官方 asr/protocol.py 在 import 时通过 logging.basicConfig 写入的日志文件
+run.log
