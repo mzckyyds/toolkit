@@ -33,11 +33,11 @@ app = typer.Typer()
 
 @app.command()
 def recognize(
-    file: str = typer.Argument(
+    *,
+    file: str = typer.Option(
         ...,
         help="音频文件路径.",
     ),
-    *,
     endpoint: str = typer.Option(
         _DEFAULT_ENDPOINT,
         help="请求端点(WebSocket).",

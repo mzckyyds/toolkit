@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import os
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
@@ -35,11 +36,40 @@ _DEFAULT_AUDIO_SPEECH_RATE = 0
 _DEFAULT_AUDIO_LOUDNESS_RATE = 0
 _DEFAULT_AUDIO_ENABLE_SUBTITLE = True
 
+# 音频格式 -> 临时文件后缀名
+_FORMAT_SUFFIXES = {
+    "mp3": ".mp3",
+    "pcm": ".pcm",
+    "ogg_opus": ".ogg",
+    "wav": ".wav",
+}
+
 
 # ======================================================================================
 # Helpers
 # ======================================================================================
-def _parse_subtitle(payload: bytes) -> dict[str, Any] | None:
+def _create_temp_output(
+    *,
+    audio_format: str,
+) -> Path:
+    """根据音频格式确定后缀名, 创建临时输出文件并返回其路径."""
+    suffix = _FORMAT_SUFFIXES.get(audio_format, f".{audio_format}")
+    with tempfile.NamedTemporaryFile(
+        prefix="pymzckcli_tts_",
+        suffix=suffix,
+        delete=False,
+    ) as temp_file:
+        temp_path = Path(temp_file.name)
+    logger.info(
+        "Created temporary output file: path=%r, format=%r", temp_path, audio_format
+    )
+    return temp_path
+
+
+def _parse_subtitle(
+    *,
+    payload: bytes,
+) -> dict[str, Any] | None:
     """解析 TTSSubtitle 事件 payload, 失败时返回 None."""
     try:
         return json.loads(payload.decode("utf-8"))
@@ -49,6 +79,7 @@ def _parse_subtitle(payload: bytes) -> dict[str, Any] | None:
 
 
 def _accumulate(
+    *,
     msg: _protocol.Message,
     audio_data: bytearray,
     subtitles: list[dict[str, Any]],
@@ -64,7 +95,7 @@ def _accumulate(
         msg.type == _protocol.MsgType.FullServerResponse
         and msg.event == _protocol.EventType.TTSSubtitle
         and msg.payload
-        and (subtitle := _parse_subtitle(msg.payload)) is not None
+        and (subtitle := _parse_subtitle(payload=msg.payload)) is not None
     ):
         subtitles.append(subtitle)
 
@@ -138,7 +169,7 @@ async def _synthesize(  # noqa: PLR0913
                 and msg.event == _protocol.EventType.SessionFinished
             ):
                 break
-            _accumulate(msg, audio_data, subtitles)
+            _accumulate(msg=msg, audio_data=audio_data, subtitles=subtitles)
 
         if not audio_data:
             errmsg = "No audio data received"
@@ -161,14 +192,14 @@ app = typer.Typer()
 
 @app.command()
 def synth(  # noqa: PLR0913
-    text: str = typer.Argument(
+    *,
+    text: str = typer.Option(
         ...,
         help="要合成的文本.",
     ),
-    *,
-    output: str = typer.Option(
-        "output.mp3",
-        help="输出音频文件路径.",
+    output: str | None = typer.Option(
+        None,
+        help="输出音频文件路径, 未指定时创建临时文件.",
     ),
     endpoint: str = typer.Option(
         _DEFAULT_ENDPOINT,
@@ -238,6 +269,9 @@ def synth(  # noqa: PLR0913
     except Exception:
         logger.exception("TTS synthesis failed")
         raise typer.Exit(code=1) from None
+
+    if output is None:
+        output = str(_create_temp_output(audio_format=audio_format))
 
     Path(output).write_bytes(audio_data)
     typer.echo(f"音频已合成: {output} ({len(audio_data)} bytes)")
