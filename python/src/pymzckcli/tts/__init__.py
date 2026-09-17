@@ -34,7 +34,6 @@ _DEFAULT_AUDIO_SAMPLE_RATE = None
 _DEFAULT_AUDIO_BIT_RATE = None
 _DEFAULT_AUDIO_SPEECH_RATE = 0
 _DEFAULT_AUDIO_LOUDNESS_RATE = 0
-_DEFAULT_AUDIO_ENABLE_SUBTITLE = True
 
 # 音频格式 -> 临时文件后缀名
 _FORMAT_SUFFIXES = {
@@ -199,7 +198,11 @@ def synth(  # noqa: PLR0913
     ),
     output: str | None = typer.Option(
         None,
-        help="输出音频文件路径, 未指定时创建临时文件.",
+        help="音频保存路径, 未指定时自动创建临时文件.",
+    ),
+    timestamp: str | None = typer.Option(
+        None,
+        help="字级时间戳保存路径, 指定时将自动启用接口的字幕服务.",
     ),
     endpoint: str = typer.Option(
         _DEFAULT_ENDPOINT,
@@ -238,10 +241,6 @@ def synth(  # noqa: PLR0913
         help="指定音频的音量, 默认值为0, 取值范围 [-50, 100]. "
         "取值 100 代表 2.0 倍音量, -50 代表 0.5 倍音量.",
     ),
-    audio_enable_subtitle: bool = typer.Option(
-        default=_DEFAULT_AUDIO_ENABLE_SUBTITLE,
-        help="启用字幕服务, 开启后将返回字级别的时间戳.",
-    ),
 ) -> None:
     """合成语音并保存到文件."""
     api_key = os.environ.get("ARK_TTS_API_KEY")
@@ -262,7 +261,7 @@ def synth(  # noqa: PLR0913
                 audio_bit_rate=audio_bit_rate,
                 audio_speech_rate=audio_speech_rate,
                 audio_loudness_rate=audio_loudness_rate,
-                audio_enable_subtitle=audio_enable_subtitle,
+                audio_enable_subtitle=bool(timestamp),
             )
         )
 
@@ -274,12 +273,11 @@ def synth(  # noqa: PLR0913
         output = str(_create_temp_output(audio_format=audio_format))
 
     Path(output).write_bytes(audio_data)
-    typer.echo(f"音频已合成: {output} ({len(audio_data)} bytes)")
+    typer.echo(f"音频已保存: {output} ({len(audio_data)} bytes)")
 
-    if subtitles:
-        subtitle_path = Path(output).with_suffix(".json")
-        subtitle_path.write_text(
+    if timestamp:
+        Path(timestamp).write_text(
             json.dumps(subtitles, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        typer.echo(f"字幕已保存: {subtitle_path}")
+        typer.echo(f"字级时间戳已保存: {timestamp}")
