@@ -1,8 +1,7 @@
 [project]
 name = "pymzckcli"
 version = "0.1.0"
-description = "Personal Python toolkit CLI (pymzckcli)"
-readme = "README.md"
+description = "Python CLI Toolkit"
 authors = [{ name = "mzckyyds", email = "1024418791@qq.com" }]
 requires-python = ">=3.12"
 dependencies = [
