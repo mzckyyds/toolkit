@@ -6,6 +6,7 @@ reference: https://docs.volcengine.com/docs/6561/2628951?lang=zh
 import asyncio
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -32,11 +33,15 @@ app = typer.Typer()
 
 
 @app.command()
-def recognize(
+def recognize(  # noqa: PLR0913
     *,
     file: str = typer.Option(
         ...,
         help="音频文件路径.",
+    ),
+    output: str | None = typer.Option(
+        None,
+        help="识别结果保存路径, 未指定时仅输出到终端.",
     ),
     endpoint: str = typer.Option(
         _DEFAULT_ENDPOINT,
@@ -109,3 +114,7 @@ def recognize(
         return
 
     typer.echo(f"识别结果: {final_text}")
+
+    if output is not None:
+        Path(output).write_text(final_text, encoding="utf-8")
+        typer.echo(f"识别结果已保存: {output}")

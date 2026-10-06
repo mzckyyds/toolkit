@@ -192,9 +192,13 @@ app = typer.Typer()
 @app.command()
 def synth(  # noqa: PLR0913
     *,
-    text: str = typer.Option(
-        ...,
-        help="要合成的文本.",
+    text: str | None = typer.Option(
+        None,
+        help="待合成文本, 与 file 二选一.",
+    ),
+    file: str | None = typer.Option(
+        None,
+        help="待合成文本的文件路径, 与 text 二选一.",
     ),
     output: str | None = typer.Option(
         None,
@@ -246,6 +250,21 @@ def synth(  # noqa: PLR0913
     api_key = os.environ.get("ARK_TTS_API_KEY")
     if api_key is None:
         errmsg = "未找到 TTS API Key, 请设置环境变量 ARK_TTS_API_KEY"
+        raise typer.BadParameter(errmsg)
+
+    if text is not None and file is not None:
+        errmsg = "text 与 file 参数只能二选一"
+        raise typer.BadParameter(errmsg)
+
+    if file is not None:
+        try:
+            text = Path(file).read_text(encoding="utf-8")
+        except OSError as e:
+            errmsg = f"无法读取文本文件: {file!r} ({e})"
+            raise typer.BadParameter(errmsg) from None
+
+    if text is None:
+        errmsg = "text 与 file 参数必须指定其一"
         raise typer.BadParameter(errmsg)
 
     try:
