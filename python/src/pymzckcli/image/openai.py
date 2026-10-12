@@ -20,9 +20,6 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-# 图片生成与编辑相关路径
-_GENERATIONS_PATH = "/images/generations"
-_EDITS_PATH = "/images/edits"
 
 # 图片生成耗时较长, 请求超时放宽到 10 分钟
 _REQUEST_TIMEOUT = 600
@@ -47,13 +44,17 @@ _FORMAT_SUFFIXES = {
 
 # 默认参数值
 _DEFAULT_PROMPT_TYPE = "text"
-_DEFAULT_BASE_URL = "https://api.teamorouter.com/v1"
 _DEFAULT_MODEL = "gpt-image-2.5-flare"
-_DEFAULT_SIZE = "auto"
-_DEFAULT_QUALITY = "auto"
+_DEFAULT_SIZE = "1024x1024"
+_DEFAULT_QUALITY = "low"
 _DEFAULT_OUTPUT_FORMAT = "png"
 _DEFAULT_BACKGROUND = "auto"
 _DEFAULT_MODERATION = "auto"
+_DEFAULT_BASE_URL = "https://api.teamorouter.com/v1"
+
+# 图片生成与编辑相关路径
+_GENERATIONS_PATH = "/images/generations"
+_EDITS_PATH = "/images/edits"
 
 
 # ======================================================================================
