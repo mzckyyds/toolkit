@@ -1,4 +1,4 @@
-"""火山引擎单向流式语音合成 WebSocket 命令行工具.
+"""火山引擎单向流式语音合成命令行工具(基于 WebSocket).
 
 reference: https://docs.volcengine.com/docs/6561/2534913?lang=zh
 """
@@ -186,7 +186,11 @@ async def _synthesize(  # noqa: PLR0913
 # ======================================================================================
 # Commands
 # ======================================================================================
-app = typer.Typer()
+app = typer.Typer(
+    name="tts",
+    help="火山引擎单向流式语音合成(reference: https://docs.volcengine.com/docs/6561/2534913?lang=zh).",
+    no_args_is_help=True,
+)
 
 
 @app.command()

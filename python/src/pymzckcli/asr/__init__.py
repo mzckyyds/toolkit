@@ -1,4 +1,4 @@
-"""火山引擎单向流式语音识别 WebSocket 命令行工具.
+"""火山引擎单向流式语音识别命令行工具(基于 WebSocket).
 
 reference: https://docs.volcengine.com/docs/6561/2628951?lang=zh
 """
@@ -29,7 +29,11 @@ _DEFAULT_AUDIO_LANGUAGE = None
 # ======================================================================================
 # Commands
 # ======================================================================================
-app = typer.Typer()
+app = typer.Typer(
+    name="asr",
+    help="火山引擎单向流式语音识别(reference: https://docs.volcengine.com/docs/6561/2628951?lang=zh).",
+    no_args_is_help=True,
+)
 
 
 @app.command()
