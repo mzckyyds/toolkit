@@ -5,6 +5,7 @@ import typer
 from .asr import app as asr_app
 from .image import app as image_app
 from .tts import app as tts_app
+from .video import app as video_app
 
 app = typer.Typer(
     help="Python CLI Toolkit",
@@ -14,6 +15,7 @@ app = typer.Typer(
 app.add_typer(asr_app)
 app.add_typer(tts_app)
 app.add_typer(image_app)
+app.add_typer(video_app)
 
 
 def main() -> None:
