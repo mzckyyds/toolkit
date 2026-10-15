@@ -7,7 +7,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import typer
 
@@ -27,6 +27,37 @@ _DEFAULT_AUDIO_LANGUAGE = None
 
 
 # ======================================================================================
+# Fields
+# ======================================================================================
+FileField = Annotated[
+    str,
+    typer.Option(help="音频文件路径."),
+]
+OutputField = Annotated[
+    str | None,
+    typer.Option(help="识别结果保存路径, 未指定时仅输出到终端."),
+]
+EndpointField = Annotated[
+    str,
+    typer.Option(help="请求端点(WebSocket)."),
+]
+ResourceIdField = Annotated[
+    str,
+    typer.Option(help="请求的模型版本."),
+]
+SegDurationField = Annotated[
+    int,
+    typer.Option(help="每个音频包时长 (ms)."),
+]
+AudioLanguageField = Annotated[
+    str | None,
+    typer.Option(
+        help="为空时支持识别以下语种: 中文/英文/上海话/闽南话/四川话/陕西话/粤语."
+    ),
+]
+
+
+# ======================================================================================
 # Commands
 # ======================================================================================
 app = typer.Typer(
@@ -39,30 +70,12 @@ app = typer.Typer(
 @app.command()
 def recognize(  # noqa: PLR0913
     *,
-    file: str = typer.Option(
-        ...,
-        help="音频文件路径.",
-    ),
-    output: str | None = typer.Option(
-        None,
-        help="识别结果保存路径, 未指定时仅输出到终端.",
-    ),
-    endpoint: str = typer.Option(
-        _DEFAULT_ENDPOINT,
-        help="请求端点(WebSocket).",
-    ),
-    resource_id: str = typer.Option(
-        _DEFAULT_RESOURCE_ID,
-        help="请求的模型版本.",
-    ),
-    seg_duration: int = typer.Option(
-        _DEFAULT_SEG_DURATION,
-        help="每个音频包时长 (ms).",
-    ),
-    audio_language: str | None = typer.Option(
-        _DEFAULT_AUDIO_LANGUAGE,
-        help="为空时支持识别以下语种: 中文/英文/上海话/闽南话/四川话/陕西话/粤语.",
-    ),
+    file: FileField,
+    output: OutputField = None,
+    endpoint: EndpointField = _DEFAULT_ENDPOINT,
+    resource_id: ResourceIdField = _DEFAULT_RESOURCE_ID,
+    seg_duration: SegDurationField = _DEFAULT_SEG_DURATION,
+    audio_language: AudioLanguageField = _DEFAULT_AUDIO_LANGUAGE,
 ) -> None:
     """识别音频文件并输出转写文本."""
     api_key = os.environ.get("ARK_ASR_API_KEY")

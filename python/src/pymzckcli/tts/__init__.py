@@ -10,7 +10,7 @@ import os
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import typer
 import websockets
@@ -42,6 +42,80 @@ _FORMAT_SUFFIXES = {
     "ogg_opus": ".ogg",
     "wav": ".wav",
 }
+
+
+# ======================================================================================
+# Fields
+# ======================================================================================
+TextField = Annotated[
+    str | None,
+    typer.Option(help="待合成文本, 与 file 二选一."),
+]
+FileField = Annotated[
+    str | None,
+    typer.Option(help="待合成文本的文件路径, 与 text 二选一."),
+]
+OutputField = Annotated[
+    str | None,
+    typer.Option(help="音频保存路径, 未指定时自动创建临时文件."),
+]
+TimestampField = Annotated[
+    str | None,
+    typer.Option(help="字级时间戳保存路径, 指定时将自动启用接口的字幕服务."),
+]
+ContextTextsField = Annotated[
+    list[str],
+    typer.Option(
+        "--context-text",
+        help="控制说话语调和情绪的上下文文本, 可多次指定, "
+        "序列化后传入 req_params.additions.",
+    ),
+]
+EndpointField = Annotated[
+    str,
+    typer.Option(help="请求端点(WebSocket)."),
+]
+ResourceIdField = Annotated[
+    str,
+    typer.Option(help="请求的模型版本."),
+]
+SpeakerField = Annotated[
+    str,
+    typer.Option(help="音色."),
+]
+AudioFormatField = Annotated[
+    str,
+    typer.Option(help="指定音频格式: mp3/pcm/ogg_opus/wav."),
+]
+AudioSampleRateField = Annotated[
+    int | None,
+    typer.Option(
+        help="指定输出音频的采样率(Hz), 不同音频格式支持的采样率不同, "
+        "wav/pcm/mp3 默认值为24000, 可选值为 [8000, 16000, 22050, 24000, "
+        "32000, 44100, 48000], ogg_opus 仅支持 48k."
+    ),
+]
+AudioBitRateField = Annotated[
+    int | None,
+    typer.Option(
+        help="指定音频比特率(bps), mp3 默认值为 64000, 可选值为 [64000, 160000], "
+        "ogg_opus 可选值为 [64000, 160000], wav/pcm 不支持."
+    ),
+]
+AudioSpeechRateField = Annotated[
+    int,
+    typer.Option(
+        help="指定音频的语速, 默认值为0, 取值范围 [-50, 100]. "
+        "取值 100 代表 2.0 倍速, -50 代表0.5倍速."
+    ),
+]
+AudioLoudnessRateField = Annotated[
+    int,
+    typer.Option(
+        help="指定音频的音量, 默认值为0, 取值范围 [-50, 100]. "
+        "取值 100 代表 2.0 倍音量, -50 代表 0.5 倍音量."
+    ),
+]
 
 
 # ======================================================================================
@@ -106,6 +180,7 @@ async def _synthesize(  # noqa: PLR0913
     resource_id: str,
     speaker: str,
     text: str,
+    context_texts: list[str],
     audio_format: str,
     audio_sample_rate: int | None,
     audio_bit_rate: int | None,
@@ -131,13 +206,16 @@ async def _synthesize(  # noqa: PLR0913
     if audio_bit_rate is not None:
         audio_params["bit_rate"] = audio_bit_rate
 
-    body: dict[str, Any] = {
-        "req_params": {
-            "speaker": speaker,
-            "text": text,
-            "audio_params": audio_params,
-        }
+    req_params: dict[str, Any] = {
+        "speaker": speaker,
+        "text": text,
+        "audio_params": audio_params,
     }
+    if context_texts:
+        # NOTE: additions 为 JSON 字符串而非对象
+        req_params["additions"] = json.dumps({"context_texts": context_texts})
+
+    body: dict[str, Any] = {"req_params": req_params}
 
     websocket = await websockets.connect(
         url,
@@ -196,59 +274,19 @@ app = typer.Typer(
 @app.command()
 def synth(  # noqa: PLR0913
     *,
-    text: str | None = typer.Option(
-        None,
-        help="待合成文本, 与 file 二选一.",
-    ),
-    file: str | None = typer.Option(
-        None,
-        help="待合成文本的文件路径, 与 text 二选一.",
-    ),
-    output: str | None = typer.Option(
-        None,
-        help="音频保存路径, 未指定时自动创建临时文件.",
-    ),
-    timestamp: str | None = typer.Option(
-        None,
-        help="字级时间戳保存路径, 指定时将自动启用接口的字幕服务.",
-    ),
-    endpoint: str = typer.Option(
-        _DEFAULT_ENDPOINT,
-        help="请求端点(WebSocket).",
-    ),
-    resource_id: str = typer.Option(
-        _DEFAULT_RESOURCE_ID,
-        help="请求的模型版本.",
-    ),
-    speaker: str = typer.Option(
-        _DEFAULT_SPEAKER,
-        help="音色.",
-    ),
-    audio_format: str = typer.Option(
-        _DEFAULT_AUDIO_FORMAT,
-        help="指定音频格式: mp3/pcm/ogg_opus/wav.",
-    ),
-    audio_sample_rate: int | None = typer.Option(
-        _DEFAULT_AUDIO_SAMPLE_RATE,
-        help="指定输出音频的采样率(Hz), 不同音频格式支持的采样率不同, "
-        "wav/pcm/mp3 默认值为24000, 可选值为 [8000, 16000, 22050, 24000, "
-        "32000, 44100, 48000], ogg_opus 仅支持 48k.",
-    ),
-    audio_bit_rate: int | None = typer.Option(
-        _DEFAULT_AUDIO_BIT_RATE,
-        help="指定音频比特率(bps), mp3 默认值为 64000, 可选值为 [64000, 160000], "
-        "ogg_opus 可选值为 [64000, 160000], wav/pcm 不支持.",
-    ),
-    audio_speech_rate: int = typer.Option(
-        _DEFAULT_AUDIO_SPEECH_RATE,
-        help="指定音频的语速, 默认值为0, 取值范围 [-50, 100]. "
-        "取值 100 代表 2.0 倍速, -50 代表0.5倍速.",
-    ),
-    audio_loudness_rate: int = typer.Option(
-        _DEFAULT_AUDIO_LOUDNESS_RATE,
-        help="指定音频的音量, 默认值为0, 取值范围 [-50, 100]. "
-        "取值 100 代表 2.0 倍音量, -50 代表 0.5 倍音量.",
-    ),
+    text: TextField = None,
+    file: FileField = None,
+    output: OutputField = None,
+    timestamp: TimestampField = None,
+    context_texts: ContextTextsField = [],  # noqa: B006
+    endpoint: EndpointField = _DEFAULT_ENDPOINT,
+    resource_id: ResourceIdField = _DEFAULT_RESOURCE_ID,
+    speaker: SpeakerField = _DEFAULT_SPEAKER,
+    audio_format: AudioFormatField = _DEFAULT_AUDIO_FORMAT,
+    audio_sample_rate: AudioSampleRateField = _DEFAULT_AUDIO_SAMPLE_RATE,
+    audio_bit_rate: AudioBitRateField = _DEFAULT_AUDIO_BIT_RATE,
+    audio_speech_rate: AudioSpeechRateField = _DEFAULT_AUDIO_SPEECH_RATE,
+    audio_loudness_rate: AudioLoudnessRateField = _DEFAULT_AUDIO_LOUDNESS_RATE,
 ) -> None:
     """合成语音并保存到文件."""
     api_key = os.environ.get("ARK_TTS_API_KEY")
@@ -279,6 +317,7 @@ def synth(  # noqa: PLR0913
                 resource_id=resource_id,
                 speaker=speaker,
                 text=text,
+                context_texts=context_texts,
                 audio_format=audio_format,
                 audio_sample_rate=audio_sample_rate,
                 audio_bit_rate=audio_bit_rate,
