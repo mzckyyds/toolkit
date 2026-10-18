@@ -18,5 +18,5 @@ app = typer.Typer(
     help="语音识别/合成(火山引擎)",
     no_args_is_help=True,
 )
-app.command()(recognize)
-app.command()(synthesize)
+app.command(name="asr")(recognize)
+app.command(name="tts")(synthesize)
