@@ -1,4 +1,4 @@
-"""优云智算 MiniMax H3 视频任务命令行工具.
+"""优云智算 MiniMax H3 视频生成命令行工具.
 
 密钥使用环境变量 UCLOUD_API_KEY.
 

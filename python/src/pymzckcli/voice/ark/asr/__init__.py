@@ -1,5 +1,7 @@
 """火山引擎单向流式语音识别命令行工具(基于 WebSocket).
 
+密钥优先使用环境变量 ARK_ASR_API_KEY, 其次使用 ARK_API_KEY.
+
 reference: https://docs.volcengine.com/docs/6561/2628951?lang=zh
 """
 
@@ -14,7 +16,7 @@ import typer
 from . import _protocol
 
 __all__ = [
-    "app",
+    "recognize",
 ]
 
 
@@ -60,14 +62,6 @@ AudioLanguageField = Annotated[
 # ======================================================================================
 # Commands
 # ======================================================================================
-app = typer.Typer(
-    name="asr",
-    help="火山引擎单向流式语音识别(reference: https://docs.volcengine.com/docs/6561/2628951?lang=zh).",
-    no_args_is_help=True,
-)
-
-
-@app.command()
 def recognize(  # noqa: PLR0913
     *,
     file: FileField,
@@ -78,9 +72,9 @@ def recognize(  # noqa: PLR0913
     audio_language: AudioLanguageField = _DEFAULT_AUDIO_LANGUAGE,
 ) -> None:
     """识别音频文件并输出转写文本."""
-    api_key = os.environ.get("ARK_ASR_API_KEY")
+    api_key = os.environ.get("ARK_ASR_API_KEY") or os.environ.get("ARK_API_KEY")
     if api_key is None:
-        errmsg = "未找到 ASR API Key, 请设置环境变量 ARK_ASR_API_KEY"
+        errmsg = "未找到 API Key, 请设置环境变量 ARK_ASR_API_KEY 或 ARK_API_KEY"
         raise typer.BadParameter(errmsg)
 
     config = _protocol.Config(

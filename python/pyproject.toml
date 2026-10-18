@@ -34,8 +34,8 @@ line-length = 88 # 与 Black 默认值一致
 target-version = 'py312' # `[project].requires-python = ">=3.12"` -> `[tool.ruff].target-version = 'py312'`
 # 官方 demo 原样拷贝的文件, 不做任何修改, 因此跳过 lint / format
 extend-exclude = [
-    "src/pymzckcli/asr/_protocol.py",
-    "src/pymzckcli/tts/_protocol.py",
+    "src/pymzckcli/voice/ark/asr/_protocol.py",
+    "src/pymzckcli/voice/ark/tts/_protocol.py",
 ]
 
 [tool.ruff.lint]
@@ -58,6 +58,6 @@ skip-magic-trailing-comma = false
 typeCheckingMode = "strict"
 # 官方 demo 原样拷贝的文件, 不做任何修改, 因此跳过类型检查
 ignore = [
-    "src/pymzckcli/asr/_protocol.py",
-    "src/pymzckcli/tts/_protocol.py",
+    "src/pymzckcli/voice/ark/asr/_protocol.py",
+    "src/pymzckcli/voice/ark/tts/_protocol.py",
 ]

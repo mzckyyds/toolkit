@@ -1,5 +1,7 @@
 """火山引擎单向流式语音合成命令行工具(基于 WebSocket).
 
+密钥优先使用环境变量 ARK_TTS_API_KEY, 其次使用 ARK_API_KEY.
+
 reference: https://docs.volcengine.com/docs/6561/2534913?lang=zh
 """
 
@@ -18,7 +20,7 @@ import websockets
 from . import _protocol
 
 __all__ = [
-    "app",
+    "synthesize",
 ]
 
 
@@ -264,15 +266,7 @@ async def _synthesize(  # noqa: PLR0913
 # ======================================================================================
 # Commands
 # ======================================================================================
-app = typer.Typer(
-    name="tts",
-    help="火山引擎单向流式语音合成(reference: https://docs.volcengine.com/docs/6561/2534913?lang=zh).",
-    no_args_is_help=True,
-)
-
-
-@app.command()
-def synth(  # noqa: PLR0913
+def synthesize(  # noqa: PLR0913
     *,
     text: TextField = None,
     file: FileField = None,
@@ -289,9 +283,9 @@ def synth(  # noqa: PLR0913
     audio_loudness_rate: AudioLoudnessRateField = _DEFAULT_AUDIO_LOUDNESS_RATE,
 ) -> None:
     """合成语音并保存到文件."""
-    api_key = os.environ.get("ARK_TTS_API_KEY")
+    api_key = os.environ.get("ARK_TTS_API_KEY") or os.environ.get("ARK_API_KEY")
     if api_key is None:
-        errmsg = "未找到 TTS API Key, 请设置环境变量 ARK_TTS_API_KEY"
+        errmsg = "未找到 API Key, 请设置环境变量 ARK_TTS_API_KEY 或 ARK_API_KEY"
         raise typer.BadParameter(errmsg)
 
     if text is not None and file is not None:
